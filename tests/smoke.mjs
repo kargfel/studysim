@@ -53,9 +53,14 @@ async function waitForScene(page, key, timeoutMs) {
 async function finishSideQuest(page, key) {
   await page.evaluate((sceneKey) => {
     const scene = window.SS.game.scene.getScene(sceneKey);
-    const result = sceneKey === 'PruefungScene'
-      ? { id: 'pruefung', title: 'Mündliche Prüfung', success: true, ects: 5, grade: 2.0, message: 'Smoke-Test' }
-      : { id: sceneKey, title: sceneKey, success: true, ects: 3, message: 'Smoke-Test' };
+    // realistische Ergebnisse, damit das Zeugnis-Bild für die Abgabe stimmt
+    const RESULTS = {
+      EduroamScene: { id: 'eduroam', title: 'WLAN-Odyssee: eduroam einrichten', ects: 3 },
+      WasserspenderScene: { id: 'wasserspender', title: 'Hydration Quest: Der Wasserspender', ects: 3 },
+      KlausurScene: { id: 'klausur', title: 'Klausur', ects: 6 },
+      PruefungScene: { id: 'pruefung', title: 'Mündliche Projektarbeitsprüfung', ects: 5, grade: 2.0 }
+    };
+    const result = Object.assign({ success: true, message: 'Smoke-Test' }, RESULTS[sceneKey]);
     window.SS.SideQuest.finish(scene, result);
   }, key);
 }
@@ -116,6 +121,7 @@ for (const key of SIDE_QUESTS) {
   await check(`Side Quest ${key} startet (Übungsmodus)`, async (open) => {
     const ctx = await open({ scene: key });
     await waitForScene(ctx.page, key, 5000);
+    await ctx.page.waitForFunction((k) => !window.SS.game.scene.getScene(k).cameras.main.fadeEffect.isRunning, key, { timeout: 5000 });
     await ctx.page.waitForTimeout(500);
     await ctx.page.screenshot({ path: shotPath(`0${idx}-${name}-intro.png`) });
     await ctx.page.keyboard.press('Enter');

@@ -34,6 +34,8 @@
    * Hängt einen Tastatur-Handler an, der beim Beenden der Szene entfernt wird.
    * Phaser 3.90 meldet bei mehreren Tastendrücken im selben Frame frühere keydowns
    * erneut – deshalb wird jedes DOM-Ereignis pro Handler nur einmal weitergereicht.
+   * Auto-Repeat einer gehaltenen Taste zählt nicht als neuer Druck (sonst würde der
+   * gehaltene Dauersprung z. B. das Intro einer Side Quest überspringen).
    */
   function onKey(scene, keyName, handler) {
     if (!scene.input || !scene.input.keyboard) return () => {};
@@ -41,7 +43,7 @@
     const seen = new WeakSet();
     const once = (event) => {
       if (event && typeof event === 'object') {
-        if (seen.has(event)) return;
+        if (event.repeat || seen.has(event)) return;
         seen.add(event);
       }
       handler(event);

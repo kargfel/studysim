@@ -4,7 +4,7 @@
  * API (alle Szenen nutzen sie – bitte kompatibel halten):
  *   SS.Audio.unlock()            – AudioContext nach einer Nutzer-Geste starten (main.js ruft das auf)
  *   SS.Audio.sfx(name)           – 'jump','coin','death','checkpoint','portal','pad','orb',
- *                                  'click','success','fail','error','type','water','buzz','tick','win','lose'
+ *                                  'click','success','fail','error','type','water','hiss','buzz','tick','win','lose'
  *                                  (unbekannte Namen bleiben still)
  *   SS.Audio.music.play(track)   – 'menu','run','klausur','boss','sidequest' (gleicher Track = nichts tun)
  *   SS.Audio.music.stop()        – Musik ausblenden
@@ -250,6 +250,10 @@
       tone({ wave: 'sine', freq: base, to: base * 2.8, slide: 0.07, at: t, dur: 0.05, vol: 0.3, env: ENV.blip });
       const splash = { type: 'bandpass', freq: 900 + Math.random() * 600, q: 3 };
       noise({ at: t, dur: 0.08, vol: 0.07, env: ENV.ding, filter: splash });
+    },
+    hiss(t) {
+      // Zischen ohne Wasser (z. B. CO₂ leer): gefiltertes Rauschen, das abklingt
+      noise({ at: t, dur: 0.35, vol: 0.22, env: ENV.crash, filter: { type: 'highpass', freq: 3500, to: 1800 } });
     },
     buzz(t) {
       // Quiz-Summer: zwei leicht verstimmte tiefe Töne erzeugen eine raue Schwebung

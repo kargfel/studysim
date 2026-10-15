@@ -57,9 +57,13 @@
         if (started) return;
         started = true;
         container.destroy();
+        // Klick-Schild: Der zweite Klick eines Doppelklicks soll nicht im Spiel darunter landen
+        const shield = scene.add.zone(0, 0, C.WIDTH, C.HEIGHT).setOrigin(0).setInteractive().setDepth(1999);
+        scene.time.delayedCall(500, () => shield.destroy());
         if (SS.Audio) SS.Audio.unlock();
         onStart();
       };
+      SS.UI.onKey(scene, 'M', () => SS.Audio && SS.Audio.toggleMute()); // Ton an/aus wie im Runner
       const btn = SS.UI.button(scene, C.WIDTH / 2, py + panelH - 40, cfg.buttonLabel || "Los geht's", start, {
         color: C.COLORS.dhbwRed, key: 'ENTER'
       });

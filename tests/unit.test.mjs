@@ -247,3 +247,11 @@ test('Audio: API läuft ohne WebAudio (Node) ohne Fehler', async () => {
   });
   assert.equal(typeof A.isMuted(), 'boolean');
 });
+
+test('State: Notenrundung genau zwischen zwei Stufen ergibt die bessere Note', () => {
+  // 1 + 3 · (1 − Ü/100) + N/100 mit ganzzahligen Balken trifft solche Mittelwerte regelmäßig
+  assert.equal(State.roundGrade(1 + 3 * (1 - 72 / 100) + 1 / 100), State.roundGrade(1 + 3 * (1 - 77 / 100) + 16 / 100));
+  assert.equal(State.roundGrade(1.85), 1.7);
+  assert.equal(State.roundGrade(3.85), 3.7);
+  assert.equal(State.roundGrade(4.0000000001), 4.0);
+});

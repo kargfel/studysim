@@ -159,9 +159,10 @@
   State.roundGrade = function roundGrade(raw) {
     const steps = [1.0, 1.3, 1.7, 2.0, 2.3, 2.7, 3.0, 3.3, 3.7, 4.0, 5.0];
     if (typeof raw !== 'number' || !isFinite(raw)) return 5.0;
-    if (raw > 4.0) return 5.0;
+    if (raw > 4.0 + 1e-9) return 5.0;
     let best = steps[0];
-    for (const s of steps) if (Math.abs(s - raw) < Math.abs(best - raw)) best = s;
+    // Toleranz: genau in der Mitte zweier Stufen gewinnt die bessere Note (statt Gleitkomma-Zufall)
+    for (const s of steps) if (Math.abs(s - raw) < Math.abs(best - raw) - 1e-9) best = s;
     return best;
   };
 
