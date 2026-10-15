@@ -9,6 +9,10 @@
 (function () {
   'use strict';
   var CDN_URL = 'https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js';
+  // Subresource Integrity: Der Browser führt die CDN-Datei nur aus, wenn sie exakt dieser
+  // Version entspricht (bei einem Phaser-Update neu berechnen:
+  // openssl dgst -sha384 -binary vendor/phaser.min.js | openssl base64 -A)
+  var CDN_SRI = 'sha384-AvQiDMZAVLda3VtAoU5MCfBz8pzXhteb2CiUJeKBmPlWzpXj1uJ96Km11+YuFNu/';
   var LOCAL_URL = 'vendor/phaser.min.js';
 
   // Versions-Parameter (?v=…) vom eigenen <script>-Tag übernehmen (setzt deploy/server.mjs)
@@ -16,7 +20,7 @@
   var query = own && own.src.indexOf('?') !== -1 ? own.src.slice(own.src.indexOf('?')) : '';
 
   if (location.protocol === 'file:') {
-    document.write('<script src="' + CDN_URL + '"><\/script>');
+    document.write('<script src="' + CDN_URL + '" integrity="' + CDN_SRI + '" crossorigin="anonymous"><\/script>');
     document.write('<script>window.Phaser || document.write(\'<script src="' + LOCAL_URL + '"><\\/script>\');<\/script>');
   } else {
     document.write('<script src="' + LOCAL_URL + query + '"><\/script>');

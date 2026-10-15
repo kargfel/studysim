@@ -10,9 +10,15 @@
  * Aufruf: node tests/hosting.mjs   (startet den Server selbst auf einem freien Port)
  */
 import http from 'node:http';
+import net from 'node:net';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { chromium } from 'playwright-core';
 import { startServer } from '../deploy/server.mjs';
 import { findChrome } from './run-scene.mjs';
+import { root } from './_load.mjs';
 
 const failures = [];
 let passed = 0;
@@ -56,6 +62,7 @@ try {
   check('nosniff gesetzt', index.headers['x-content-type-options'] === 'nosniff');
   check('Framing verboten', index.headers['x-frame-options'] === 'DENY');
   check('index.html: Cache-Control no-cache', index.headers['cache-control'] === 'no-cache');
+  check('HSTS gesetzt', /max-age=\d+/.test(index.headers['strict-transport-security'] || ''));
 
   const again = await request(port, '/', { headers: { 'If-None-Match': index.headers.etag } });
   check('ETag → 304', again.status === 304, `Status ${again.status}`);
@@ -72,14 +79,26 @@ try {
   const js = await request(port, '/src/config.js');
   check('JS mit richtigem MIME-Typ', /text\/javascript/.test(js.headers['content-type'] || ''));
   check('unversioniertes JS: kurzer Cache', js.headers['cache-control'] === 'public, max-age=300');
-  const jsV = await request(port, '/src/config.js?v=abc');
-  check('versioniertes JS: immutable', /immutable/.test(jsV.headers['cache-control'] || ''));
+  const buildId = (html.match(/config\.js\?v=([0-9a-f]{10})/) || [])[1];
+  const jsV = await request(port, `/src/config.js?v=${buildId}`);
+  check('JS mit aktueller Build-ID: immutable', /immutable/.test(jsV.headers['cache-control'] || ''));
+  const jsWrong = await request(port, '/src/config.js?v=0123456789');
+  check('JS mit fremder/künftiger ID: no-store (kein Cache-Poisoning)', jsWrong.headers['cache-control'] === 'no-store', jsWrong.headers['cache-control']);
 
   const phaserPlain = await request(port, '/vendor/phaser.min.js');
   const phaserGzip = await request(port, '/vendor/phaser.min.js', { headers: { 'Accept-Encoding': 'gzip, br' } });
   check('Phaser wird gzip-komprimiert', phaserGzip.headers['content-encoding'] === 'gzip' && phaserGzip.body.length < phaserPlain.body.length / 2,
     `${phaserGzip.body.length} vs. ${phaserPlain.body.length} Bytes`);
   check('Vary: Accept-Encoding', /Accept-Encoding/.test(phaserGzip.headers.vary || ''));
+
+  // Viele parallele Anfragen dürfen den Speicher nicht volllaufen lassen (Datei-Cache statt readFile je Anfrage)
+  global.gc?.();
+  const rssBefore = process.memoryUsage().rss;
+  const burst = await Promise.all(Array.from({ length: 500 }, (_, i) =>
+    request(port, `/vendor/phaser.min.js?r=${i}`, { method: 'HEAD', headers: { 'Accept-Encoding': 'gzip' } })));
+  const rssGrowthMb = (process.memoryUsage().rss - rssBefore) / 1024 / 1024;
+  check('500 parallele Anfragen: alle 200', burst.every((r) => r.status === 200));
+  check('500 parallele Anfragen: Speicher wächst kaum', rssGrowthMb < 150, `+${rssGrowthMb.toFixed(0)} MB`);
 
   // ── 2. Nur Spiel-Dateien sind öffentlich ────────────────────────
   const notFound = [
@@ -97,6 +116,62 @@ try {
   for (const p of ['/%E0%A4%A', '/src/%00.js', '/src/..%5c..%5cpackage.json']) {
     const r = await request(port, p);
     check(`${p} → 400`, r.status === 400, `Status ${r.status}`);
+  }
+
+  // Symlinks im öffentlichen Baum werden abgelehnt (Test in einer Kopie, das Projekt bleibt unberührt)
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'studysim-symlink-'));
+  try {
+    fs.mkdirSync(path.join(tmpRoot, 'deploy'));
+    fs.mkdirSync(path.join(tmpRoot, 'src'));
+    fs.copyFileSync(path.join(root, 'deploy', 'server.mjs'), path.join(tmpRoot, 'deploy', 'server.mjs'));
+    fs.writeFileSync(path.join(tmpRoot, 'index.html'), '<!doctype html><script src="src/ok.js"></script>');
+    fs.writeFileSync(path.join(tmpRoot, 'src', 'ok.js'), '// ok');
+    fs.writeFileSync(path.join(tmpRoot, 'geheim.txt'), 'API_KEY=geheim');
+    fs.symlinkSync('../geheim.txt', path.join(tmpRoot, 'src', 'link.js'));
+    const copy = await import(path.join(tmpRoot, 'deploy', 'server.mjs'));
+    const s2 = await copy.startServer({ port: 0, host: '127.0.0.1', quiet: true });
+    try {
+      check('Kopie: normale Datei → 200', (await request(s2.port, '/src/ok.js')).status === 200);
+      const link = await request(s2.port, '/src/link.js');
+      check('Symlink im öffentlichen Baum → 404', link.status === 404, `Status ${link.status}: ${link.body.toString().slice(0, 40)}`);
+    } finally {
+      await s2.close();
+    }
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+
+  // Start über einen Pfad mit Symlink (z. B. /opt/studysim → Datenplatte) und PORT-Prüfung
+  const freePort = await new Promise((resolve) => {
+    const probe = net.createServer().listen(0, '127.0.0.1', () => { const p = probe.address().port; probe.close(() => resolve(p)); });
+  });
+  const linkDir = path.join(os.tmpdir(), `studysim-link-${process.pid}`);
+  fs.rmSync(linkDir, { force: true });
+  fs.symlinkSync(root, linkDir);
+  try {
+    const started = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [path.join(linkDir, 'deploy', 'server.mjs')], {
+        env: { ...process.env, PORT: String(freePort), HOST: '127.0.0.1' }
+      });
+      let out = '';
+      const timer = setTimeout(() => { child.kill(); resolve(false); }, 8000);
+      child.stdout.on('data', (d) => {
+        out += d;
+        if (out.includes('läuft auf')) { clearTimeout(timer); child.kill('SIGTERM'); resolve(true); }
+      });
+      child.on('exit', () => { clearTimeout(timer); resolve(out.includes('läuft auf')); });
+    });
+    check('Start über Symlink-Pfad funktioniert', started);
+  } finally {
+    fs.rmSync(linkDir, { force: true });
+  }
+  for (const bad of ['0', '', 'abc', '70000', '22 23']) {
+    const code = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [path.join(root, 'deploy', 'server.mjs')], { env: { ...process.env, PORT: bad } });
+      const timer = setTimeout(() => { child.kill(); resolve('läuft'); }, 5000);
+      child.on('exit', (c) => { clearTimeout(timer); resolve(c); });
+    });
+    check(`PORT="${bad}" wird abgelehnt (Exit 1)`, code === 1, `Exit ${code}`);
   }
 
   // ── 3. Browser über http:// ─────────────────────────────────────

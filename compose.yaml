@@ -1,6 +1,8 @@
 # Studiums-Simulator auf dem Homeserver (Anleitung: docs/HOSTING.md)
 #   docker compose up -d --build
 # Erreichbar auf Port 2223 des Servers; Traefik leitet studysim.felixkarg.de dorthin weiter.
+# Eigene Anpassungen NICHT hier, sondern in compose.override.yaml (wird automatisch
+# mitgelesen und ist nicht versioniert) – sonst blockieren sie spätere Updates per git pull.
 services:
   studysim:
     build: .
@@ -17,19 +19,23 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    mem_limit: 256m
+    # Logs rotieren (Standard-Treiber json-file wächst sonst unbegrenzt)
+    logging:
+      driver: local
 
-    # ── Alternative: Traefik über Docker-Labels statt File-Provider ──────────
-    # Dann den Abschnitt "ports" oben entfernen und den Container in Traefiks
-    # Docker-Netz hängen (Netzname anpassen, hier "proxy"):
-    #
-    # networks:
-    #   - proxy
-    # labels:
-    #   - traefik.enable=true
-    #   - traefik.http.routers.studysim.rule=Host(`studysim.felixkarg.de`)
-    #   - traefik.http.routers.studysim.entrypoints=web
-    #   - traefik.http.services.studysim.loadbalancer.server.port=2223
-
+# ── Alternative: Traefik über Docker-Labels statt File-Provider ──────────────
+# In compose.override.yaml (Netzname anpassen, hier "proxy"; `!reset` ab Compose 2.24):
+#
+# services:
+#   studysim:
+#     ports: !reset []
+#     networks: [proxy]
+#     labels:
+#       - traefik.enable=true
+#       - traefik.http.routers.studysim.rule=Host(`studysim.felixkarg.de`)
+#       - traefik.http.routers.studysim.entrypoints=web
+#       - traefik.http.services.studysim.loadbalancer.server.port=2223
 # networks:
 #   proxy:
 #     external: true

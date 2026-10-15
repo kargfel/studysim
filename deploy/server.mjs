@@ -6,24 +6,29 @@
  *   PORT=2223 HOST=0.0.0.0 node deploy/server.mjs
  *
  * - Liefert NUR die Dateien aus, die das Spiel braucht (index.html, css/, src/, vendor/,
- *   favicon.svg, og-image.png) – nie .git, tests/, docs/ oder package.json.
+ *   favicon.svg, og-image.png) – nie .git, tests/, docs/ oder package.json. Symlinks im
+ *   öffentlichen Baum werden abgelehnt.
  * - Cache-Busting: In index.html bekommen alle lokalen Skripte/Styles ?v=<Build-ID>
- *   (Hash über alle Spiel-Dateien). Versionierte Dateien dürfen deshalb lange gecacht
- *   werden, nach einem Update laden Browser und Cloudflare trotzdem sofort den neuen Stand.
- * - Sicherheits-Header (strikte Content-Security-Policy, nosniff, kein Framing),
+ *   (Hash über alle Spiel-Dateien). Nur die aktuelle ID wird lange gecacht; fremde oder
+ *   künftige IDs bekommen no-store, damit niemand den Cloudflare-Cache vergiften kann.
+ * - Sicherheits-Header (strikte Content-Security-Policy, nosniff, kein Framing, HSTS),
  *   gzip, ETag/304, nur GET und HEAD.
- * - GET /healthz → "ok" (für Docker-Healthcheck und Monitoring).
+ * - Dateien werden einmal pro Version im Speicher gehalten (alle zusammen ~2 MB),
+ *   damit viele parallele Anfragen den Server nicht volllaufen lassen.
+ * - GET /healthz → "ok" (für Docker-Healthcheck und Monitoring, wird nicht geloggt).
  */
 import http from 'node:http';
+import { realpathSync } from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // ── Was öffentlich ist ────────────────────────────────────────────────
+// Neue Top-Level-Pfade hier UND im Dockerfile (COPY) eintragen.
 const PUBLIC_FILES = ['index.html', 'favicon.svg', 'og-image.png'];
 const PUBLIC_DIRS = ['css', 'src', 'vendor'];
 
@@ -59,23 +64,26 @@ const SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
-  'Cross-Origin-Opener-Policy': 'same-origin'
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  // Browser beachten HSTS nur über HTTPS (also hinter Cloudflare), lokal über http:// nicht
+  'Strict-Transport-Security': 'max-age=31536000'
 };
 
 const CACHE = {
   html: 'no-cache',                                   // immer per ETag nachfragen
-  versioned: 'public, max-age=31536000, immutable',   // ?v=… ändert sich mit jedem Update
+  versioned: 'public, max-age=31536000, immutable',   // aktuelle ?v=…-ID: ändert sich mit jedem Update
   asset: 'public, max-age=300',                        // unversionierte Spiel-Dateien
   image: 'public, max-age=86400',
   none: 'no-store'
 };
 
-const BUILD_ID_TTL_MS = 5000;   // so lange gilt eine berechnete Build-ID, bevor neu geprüft wird
+const BUILD_ID_TTL_MS = 1000;   // so lange gilt eine geprüfte Build-ID, bevor die Dateien erneut verglichen werden
 const KEEP_ALIVE_MS = 95000;    // länger als Traefiks Idle-Timeout (90 s), sonst sporadische 502
+const MAX_LOGGED_PATH = 200;    // lange Pfade im Log kürzen
 
 // ── Dateien und Build-ID ──────────────────────────────────────────────
 
-/** Alle öffentlichen Dateien relativ zu ROOT (sortiert, ohne versteckte Dateien). */
+/** Alle öffentlichen Dateien relativ zu ROOT (sortiert, ohne versteckte Dateien und Symlinks). */
 async function listPublicFiles() {
   const result = [];
   async function walk(rel) {
@@ -95,18 +103,15 @@ async function listPublicFiles() {
   for (const dir of PUBLIC_DIRS) await walk(dir);
   for (const file of PUBLIC_FILES) {
     try {
-      if ((await fsp.stat(path.join(ROOT, file))).isFile()) result.push(file);
+      if ((await fsp.lstat(path.join(ROOT, file))).isFile()) result.push(file);
     } catch { /* optional */ }
   }
   return result.sort();
 }
 
-const buildIdCache = { id: null, statKey: null, checkedAt: 0 };
+const buildIdCache = { id: null, statKey: null, checkedAt: 0, pending: null };
 
-/** Kurzer Hash über Inhalt aller Spiel-Dateien; neu berechnet, sobald sich etwas ändert. */
-async function getBuildId() {
-  const now = Date.now();
-  if (buildIdCache.id && now - buildIdCache.checkedAt < BUILD_ID_TTL_MS) return buildIdCache.id;
+async function computeBuildId() {
   const files = await listPublicFiles();
   const stats = await Promise.all(files.map((f) => fsp.stat(path.join(ROOT, f))));
   const statKey = files.map((f, i) => `${f}:${stats[i].size}:${stats[i].mtimeMs}`).join('|');
@@ -119,8 +124,17 @@ async function getBuildId() {
     buildIdCache.id = hash.digest('hex').slice(0, 10);
     buildIdCache.statKey = statKey;
   }
-  buildIdCache.checkedAt = now;
+  buildIdCache.checkedAt = Date.now();
   return buildIdCache.id;
+}
+
+/** Kurzer Hash über den Inhalt aller Spiel-Dateien. Gleichzeitige Anfragen teilen sich eine Berechnung. */
+function getBuildId() {
+  if (buildIdCache.id && Date.now() - buildIdCache.checkedAt < BUILD_ID_TTL_MS) return Promise.resolve(buildIdCache.id);
+  if (!buildIdCache.pending) {
+    buildIdCache.pending = computeBuildId().finally(() => { buildIdCache.pending = null; });
+  }
+  return buildIdCache.pending;
 }
 
 /** Hängt ?v=<id> an alle lokalen src/href-Verweise in index.html. */
@@ -157,18 +171,41 @@ async function getRealRoot() {
   return realRoot;
 }
 
-// ── Antworten ────────────────────────────────────────────────────────
+// ── Speicher-Caches (pro Datei-Version genau ein Eintrag) ──────────────
 
-const gzipCache = new Map(); // key → Buffer (Spiel-Dateien sind klein, ~3 MB unkomprimiert)
+const fileCache = new Map();  // rel → { key, body: Promise<Buffer> }
+const gzipCache = new Map();  // rel → { key, body: Buffer }
+const htmlCache = { id: null, body: null };
 
-function gzipCached(key, body) {
-  let zipped = gzipCache.get(key);
-  if (!zipped) {
-    zipped = zlib.gzipSync(body, { level: 9 });
-    gzipCache.set(key, zipped);
+function readCached(rel, abs, key) {
+  let entry = fileCache.get(rel);
+  if (!entry || entry.key !== key) {
+    entry = { key, body: fsp.readFile(abs) };
+    fileCache.set(rel, entry);
+    entry.body.catch(() => fileCache.delete(rel));
   }
-  return zipped;
+  return entry.body;
 }
+
+function gzipCached(rel, key, body) {
+  let entry = gzipCache.get(rel);
+  if (!entry || entry.key !== key) {
+    entry = { key, body: zlib.gzipSync(body, { level: 9 }) };
+    gzipCache.set(rel, entry);
+  }
+  return entry.body;
+}
+
+async function renderIndex(abs, id) {
+  if (htmlCache.id !== id) {
+    const html = await fsp.readFile(abs, 'utf8');
+    htmlCache.body = Buffer.from(addVersionToAssets(html, id));
+    htmlCache.id = id;
+  }
+  return htmlCache.body;
+}
+
+// ── Antworten ────────────────────────────────────────────────────────
 
 function send(req, res, status, body, headers) {
   res.writeHead(status, Object.assign({}, SECURITY_HEADERS, headers, { 'Content-Length': Buffer.byteLength(body) }));
@@ -179,26 +216,17 @@ function sendText(req, res, status, text, extra) {
   send(req, res, status, text, Object.assign({ 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': CACHE.none }, extra));
 }
 
-function sendBody(req, res, { body, type, etag, cacheControl, compressible, gzipKey }) {
-  const headers = { 'Content-Type': type, 'Cache-Control': cacheControl, ETag: etag };
-  if (compressible) headers.Vary = 'Accept-Encoding';
-  if (req.headers['if-none-match'] === etag) {
-    res.writeHead(304, Object.assign({}, SECURITY_HEADERS, headers));
-    res.end();
-    return 304;
-  }
-  let payload = body;
-  if (compressible && /\bgzip\b/.test(req.headers['accept-encoding'] || '') && body.length > 1024) {
-    payload = gzipCached(gzipKey, body);
-    headers['Content-Encoding'] = 'gzip';
-  }
-  send(req, res, 200, payload, headers);
-  return 200;
+/** Antwortet mit 304, wenn der Browser die Version schon hat – ohne die Datei zu lesen. */
+function sendNotModified(req, res, headers) {
+  if (req.headers['if-none-match'] !== headers.ETag) return false;
+  res.writeHead(304, Object.assign({}, SECURITY_HEADERS, headers));
+  res.end();
+  return true;
 }
 
-function cacheControlFor(rel, versioned) {
+function cacheControlFor(rel, vParam, buildId) {
   if (rel === 'index.html') return CACHE.html;
-  if (versioned) return CACHE.versioned;
+  if (vParam !== null) return vParam === buildId ? CACHE.versioned : CACHE.none;
   if (rel.endsWith('.png') || rel.endsWith('.svg')) return CACHE.image;
   return CACHE.asset;
 }
@@ -227,9 +255,9 @@ async function handle(req, res) {
   let stat;
   try {
     stat = await fsp.stat(target.abs);
-    // Symlinks dürfen nicht aus dem Projekt herausführen
+    // Kein Symlink im öffentlichen Baum: der echte Pfad muss exakt der erwartete sein
     const real = await fsp.realpath(target.abs);
-    if (!real.startsWith((await getRealRoot()) + path.sep)) throw new Error('außerhalb');
+    if (real !== path.join(await getRealRoot(), target.rel)) throw new Error('Symlink');
   } catch {
     sendText(req, res, 404, 'Nicht gefunden');
     return 404;
@@ -239,26 +267,29 @@ async function handle(req, res) {
     return 404;
   }
   const ext = path.extname(target.rel).toLowerCase();
-  const type = MIME_TYPES[ext] || 'application/octet-stream';
   const compressible = COMPRESSIBLE.has(ext);
+  const wantsGzip = compressible && /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+  const buildId = await getBuildId();
+  const vParam = url.searchParams.get('v');
+  const fileKey = target.rel === 'index.html' ? `html-${buildId}` : `${stat.size}-${Math.round(stat.mtimeMs)}`;
+  const headers = {
+    'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+    'Cache-Control': cacheControlFor(target.rel, vParam, buildId),
+    ETag: `W/"${fileKey}"`
+  };
+  if (compressible) headers.Vary = 'Accept-Encoding';
+  if (sendNotModified(req, res, headers)) return 304;
 
-  if (target.rel === 'index.html') {
-    const id = await getBuildId();
-    const html = Buffer.from(addVersionToAssets(await fsp.readFile(target.abs, 'utf8'), id));
-    return sendBody(req, res, {
-      body: html, type, compressible, etag: `W/"html-${id}"`, gzipKey: `index:${id}`, cacheControl: CACHE.html
-    });
+  const body = target.rel === 'index.html'
+    ? await renderIndex(target.abs, buildId)
+    : await readCached(target.rel, target.abs, fileKey);
+  let payload = body;
+  if (wantsGzip && body.length > 1024) {
+    payload = gzipCached(target.rel, fileKey, body);
+    headers['Content-Encoding'] = 'gzip';
   }
-  const body = await fsp.readFile(target.abs);
-  const fileKey = `${stat.size}-${Math.round(stat.mtimeMs)}`;
-  return sendBody(req, res, {
-    body,
-    type,
-    compressible,
-    etag: `W/"${fileKey}"`,
-    gzipKey: `${target.rel}:${fileKey}`,
-    cacheControl: cacheControlFor(target.rel, url.searchParams.has('v'))
-  });
+  send(req, res, 200, payload, headers);
+  return 200;
 }
 
 // ── Server ───────────────────────────────────────────────────────────
@@ -267,6 +298,7 @@ async function handle(req, res) {
  * Startet den Server. Gibt {server, port, close()} zurück (für Tests mit port: 0).
  */
 export async function startServer({ port = 2223, host = '0.0.0.0', quiet = false } = {}) {
+  await getBuildId(); // einmal vorab: Dateien lesen und hashen, bevor Anfragen kommen
   const server = http.createServer(async (req, res) => {
     const started = Date.now();
     let status = 500;
@@ -277,8 +309,8 @@ export async function startServer({ port = 2223, host = '0.0.0.0', quiet = false
       if (!res.headersSent) sendText(req, res, 500, 'Interner Fehler');
       else res.destroy();
     }
-    if (!quiet) {
-      const pathOnly = (req.url || '').split('?')[0];
+    const pathOnly = (req.url || '').split('?')[0].slice(0, MAX_LOGGED_PATH);
+    if (!quiet && pathOnly !== '/healthz') {
       console.log(`${new Date().toISOString()} ${req.method} ${pathOnly} ${status} ${Date.now() - started}ms`);
     }
   });
@@ -297,10 +329,17 @@ export async function startServer({ port = 2223, host = '0.0.0.0', quiet = false
   };
 }
 
+/** PORT aus der Umgebung: nur ganze Zahlen 1–65535 (0 = Zufallsport gibt es nur in Tests). */
+function readPort() {
+  const raw = (process.env.PORT ?? '2223').trim();
+  const port = /^\d{1,5}$/.test(raw) ? Number(raw) : NaN;
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
 async function main() {
-  const port = process.env.PORT === undefined ? 2223 : Number(process.env.PORT);
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    console.error(`[studysim] Ungültiger PORT: ${process.env.PORT}`);
+  const port = readPort();
+  if (port === null) {
+    console.error(`[studysim] Ungültiger PORT: "${process.env.PORT}" (erlaubt: 1–65535)`);
     process.exit(1);
   }
   const { server } = await startServer({ port, host: process.env.HOST || '0.0.0.0', quiet: process.env.QUIET === '1' });
@@ -314,7 +353,16 @@ async function main() {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/** Direkt gestartet (nicht importiert)? Vergleich über realpath, damit Symlink-Pfade funktionieren. */
+function isMainModule() {
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (process.argv[1] && isMainModule()) {
   main().catch((err) => {
     console.error('[studysim] Start fehlgeschlagen:', err.message);
     process.exit(1);

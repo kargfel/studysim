@@ -12,7 +12,9 @@ Was der Server mitbringt:
 
 - **Nur Spiel-Dateien öffentlich:** `index.html`, `css/`, `src/`, `vendor/`, Favicon und Vorschaubild.
   `.git`, `tests/`, `docs/` und alle anderen Pfade liefern 404.
-- **Sicherheits-Header:** strikte Content-Security-Policy, `nosniff`, kein Einbetten in fremde Seiten.
+- **Sicherheits-Header:** strikte Content-Security-Policy, `nosniff`, HSTS, kein Einbetten in fremde Seiten.
+- **Robust:** Dateien liegen einmal pro Version im Speicher, viele parallele Anfragen kosten kaum RAM.
+  Container und Dienst sind zusätzlich auf 256 MB begrenzt, die Docker-Logs rotieren.
 - **Keine Anfragen an Dritte:** Gehostet lädt das Spiel Phaser aus `vendor/` statt vom CDN.
 - **Cache-Busting:** Alle Skripte bekommen automatisch `?v=<Hash>`. Browser und Cloudflare dürfen
   sie lange cachen und laden nach einem Update trotzdem sofort den neuen Stand.
@@ -20,9 +22,12 @@ Was der Server mitbringt:
 
 ## 1. Voraussetzungen
 
-- `git`
-- **Variante A (empfohlen):** Docker mit Compose-Plugin (`docker compose version`)
-- **Variante B:** Node.js ≥ 18 als Systempaket unter `/usr/bin/node` (nicht per nvm im Home-Verzeichnis)
+- `git` und `curl`
+- **Variante A (empfohlen):** Docker mit Compose-Plugin (`docker compose version`). Dein Benutzer muss
+  in der Gruppe `docker` sein (`sudo usermod -aG docker $USER`, danach neu anmelden), sonst jeden
+  Docker-Befehl mit `sudo` ausführen.
+- **Variante B:** Node.js ≥ 22, empfohlen 24 LTS, als Systempaket unter `/usr/bin/node`
+  (z. B. NodeSource, nicht per nvm im Home-Verzeichnis)
 - Traefik-Route `studysim.felixkarg.de` → Port 2223 und der Cloudflare-Tunnel
   (Published Application / Public Hostname). Beides hast du schon; Abschnitt 4 und 5 sind Checklisten dafür.
 
@@ -33,14 +38,14 @@ sudo git clone https://github.com/kargfel/studysim.git /opt/studysim
 sudo chown -R "$USER": /opt/studysim
 cd /opt/studysim
 docker compose up -d --build
-curl -fsS http://127.0.0.1:2223/healthz      # → ok
+curl -fsS --retry 10 --retry-all-errors --retry-delay 1 http://127.0.0.1:2223/healthz   # → ok
 ```
 
 Der Container startet automatisch neu (`restart: unless-stopped`). Er läuft read-only,
 ohne Root-Rechte und ohne Linux-Capabilities. Status und Logs:
 
 ```bash
-docker compose ps          # STATUS sollte "healthy" zeigen
+docker compose ps          # STATUS zeigt nach ca. 10 s "healthy"
 docker compose logs -f     # eine Zeile pro Anfrage
 ```
 
@@ -50,11 +55,11 @@ docker compose logs -f     # eine Zeile pro Anfrage
 sudo git clone https://github.com/kargfel/studysim.git /opt/studysim
 sudo chown -R "$USER": /opt/studysim
 cd /opt/studysim
-node --version                                   # ≥ v18
+node --version                                   # ≥ v22
 sudo cp deploy/studysim.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now studysim
-curl -fsS http://127.0.0.1:2223/healthz          # → ok
+curl -fsS --retry 10 --retry-all-errors --retry-delay 1 http://127.0.0.1:2223/healthz   # → ok
 journalctl -u studysim -f                        # Logs
 ```
 
@@ -93,8 +98,10 @@ extra_hosts:
   - "host.docker.internal:host-gateway"
 ```
 
-**Traefik über Docker-Labels:** In `compose.yaml` steht eine auskommentierte Variante.
-Dann `ports` entfernen und den Container in Traefiks Netzwerk hängen.
+**Traefik über Docker-Labels oder Ziel `http://studysim:2223`:** Dann muss der Container in Traefiks
+Docker-Netz. Lege dafür eine `compose.override.yaml` an (die Vorlage steht unten in `compose.yaml`).
+Compose liest sie automatisch mit, und weil sie nicht versioniert ist, blockiert sie kein späteres
+`git pull`. Ändere deshalb nie `compose.yaml` selbst.
 
 Test über Traefik, ohne Cloudflare (Port des Traefik-Entrypoints einsetzen, z. B. 80):
 
@@ -110,6 +117,17 @@ curl -fsS -H "Host: studysim.felixkarg.de" http://127.0.0.1:80/healthz     # →
   einem HTTP-Tunnel eine Endlosschleife (`ERR_TOO_MANY_REDIRECTS`). Nimm für den Tunnel einen
   Entrypoint ohne Redirect, oder lass den Tunnel `https://traefik:443` ansprechen
   (TLS-Einstellungen: *No TLS Verify* bzw. *Origin Server Name* `studysim.felixkarg.de`).
+  Im zweiten Fall braucht der Router den TLS-Entrypoint, sonst antwortet Traefik mit 404:
+
+  ```yaml
+  http:
+    routers:
+      studysim-tls:
+        rule: Host(`studysim.felixkarg.de`)
+        entryPoints: [websecure]
+        tls: {}
+        service: studysim
+  ```
 - **HTTPS:** stellt Cloudflare automatisch bereit. Empfehlenswert: *SSL/TLS → Edge Certificates → Always Use HTTPS*.
 - **Cache:** Wegen des Cache-Bustings ist nach Updates kein Leeren nötig. Wirkt doch etwas veraltet,
   hilft *Caching → Configuration → Purge Everything*.
@@ -118,11 +136,16 @@ Danach im Browser: <https://studysim.felixkarg.de> und <https://studysim.felixka
 
 ## 6. Updates einspielen
 
+Auf dem Entwicklungsrechner committen und nach GitHub pushen, dann auf dem Server:
+
 ```bash
 cd /opt/studysim
-./deploy/update.sh            # Variante A: git pull, Image neu bauen, auf /healthz warten
+./deploy/update.sh            # Variante A: git pull, Image mit aktuellem Basis-Image neu bauen, auf /healthz warten
 ./deploy/update.sh systemd    # Variante B: git pull, Dienst neu starten
 ```
+
+`update.sh` zieht bei jedem Lauf das aktuelle `node:24-alpine`. Sicherheitsupdates für Node und
+Alpine kommen so automatisch mit.
 
 ## 7. Fehlersuche
 
@@ -139,6 +162,8 @@ cd /opt/studysim
 
 ## 8. Gut zu wissen
 
+- HSTS sendet schon der Server. Alternativ (oder zusätzlich) lässt es sich in Cloudflare unter
+  *SSL/TLS → Edge Certificates → HSTS* einschalten.
 - Das Spiel setzt keine Cookies. Highscore und Ton-Einstellung liegen nur im `localStorage` des Browsers.
 - Wird die Seite öffentlich beworben, prüfe, ob du ein Impressum und eine Datenschutzerklärung brauchst
   (Cloudflare verarbeitet als Proxy die IP-Adressen der Besucher).

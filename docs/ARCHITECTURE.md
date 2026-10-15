@@ -5,7 +5,10 @@ läuft automatisch, Crashes sind Nachklausuren, an den Checkpoints warten Side Q
 
 ## Grundregeln
 
-- **Phaser 3.90** (keine Phaser-4-APIs). Geladen vom CDN, Fallback `vendor/phaser.min.js`.
+- **Phaser 3.90** (keine Phaser-4-APIs), geladen von `src/phaser-loader.js`: per Doppelklick (file://)
+  vom CDN mit Fallback `vendor/phaser.min.js`, gehostet (http/https) immer aus `vendor/`.
+- **Hosting:** `deploy/server.mjs` liefert nur `index.html`, `css/`, `src/`, `vendor/`, `favicon.svg` und
+  `og-image.png` aus. Neue Top-Level-Pfade dort (`PUBLIC_FILES`/`PUBLIC_DIRS`) und im `Dockerfile` (`COPY`) eintragen.
 - **Klassische `<script>`-Dateien**, kein Build, keine ES-Module → Start per Doppelklick (file://).
   Reihenfolge steht in `index.html`. Neue Dateien müssen dort eingetragen werden.
 - **Ein globaler Namensraum `SS`**. Szenen registrieren sich als `SS.scenes.<Key> = class extends Phaser.Scene`.

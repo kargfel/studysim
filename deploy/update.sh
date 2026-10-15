@@ -8,30 +8,39 @@ cd "$(dirname "$0")/.."
 MODE="${1:-docker}"
 PORT="${PORT:-2223}"
 
+case "$MODE" in
+  docker) ;;
+  systemd) command -v curl >/dev/null 2>&1 || { echo "curl fehlt (z. B. sudo apt install curl)" >&2; exit 1; } ;;
+  *) echo "Unbekannter Modus: $MODE (erlaubt: docker, systemd)" >&2; exit 2 ;;
+esac
+
 echo "→ git pull"
 git pull --ff-only
 
-case "$MODE" in
-  docker)
-    echo "→ docker compose up -d --build"
-    docker compose up -d --build
-    docker image prune -f >/dev/null 2>&1 || true
-    ;;
-  systemd)
-    echo "→ systemctl restart studysim"
-    sudo systemctl restart studysim
-    ;;
-  *)
-    echo "Unbekannter Modus: $MODE (erlaubt: docker, systemd)" >&2
-    exit 2
-    ;;
-esac
+if [ "$MODE" = "docker" ]; then
+  echo "→ docker compose build --pull (holt auch Sicherheitsupdates für Node/Alpine)"
+  docker compose build --pull
+  docker compose up -d
+  docker image prune -f >/dev/null 2>&1 || true
+else
+  echo "→ systemctl restart studysim"
+  sudo systemctl restart studysim
+fi
 
-echo "→ warte auf http://127.0.0.1:$PORT/healthz"
+# Gesundheitscheck: Docker prüft im Container (unabhängig vom Host-Port), systemd über curl
+is_healthy() {
+  if [ "$MODE" = "docker" ]; then
+    docker compose exec -T studysim sh -c 'wget -qO /dev/null "http://127.0.0.1:${PORT:-2223}/healthz"' >/dev/null 2>&1
+  else
+    curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1
+  fi
+}
+
+echo "→ warte auf /healthz"
 i=0
 while [ "$i" -lt 30 ]; do
-  if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
-    echo "✔ Studiums-Simulator läuft (Port $PORT)"
+  if is_healthy; then
+    echo "✔ Studiums-Simulator läuft"
     exit 0
   fi
   i=$((i + 1))
