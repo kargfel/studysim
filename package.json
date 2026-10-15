@@ -1,0 +1,17 @@
+{
+  "name": "studiums-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Studiums-Simulator – Semester Dash (DHBW Edition): ein Geometry-Dash-artiger Runner mit Side Quests, gebaut mit Phaser 3.",
+  "scripts": {
+    "test": "node --test tests/unit.test.mjs && node tests/beatability.mjs && node tests/smoke.mjs",
+    "test:unit": "node --test tests/unit.test.mjs",
+    "test:level": "node tests/beatability.mjs",
+    "test:smoke": "node tests/smoke.mjs",
+    "scene": "node tests/run-scene.mjs",
+    "zip": "node tests/make-zip.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1"
+  }
+}

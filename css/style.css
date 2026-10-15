@@ -1,0 +1,23 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #0b0a12;
+  overflow: hidden;
+}
+
+#game {
+  width: 100vw;
+  height: 100vh;
+}
+
+#game canvas {
+  display: block;
+  box-shadow: 0 0 60px rgba(226, 0, 26, 0.25);
+}
+
+.fatal {
+  color: #fff;
+  font: 18px/1.5 "Trebuchet MS", Arial, sans-serif;
+  text-align: center;
+  padding: 4rem 1rem;
+}

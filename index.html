@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Studiums-Simulator – Semester Dash (DHBW Edition)</title>
+  <meta name="description" content="Ein Semester als Geometry-Dash-Level: Nachklausuren, eduroam, Wasserspender ohne CO₂ und die mündliche Projektarbeitsprüfung als Endboss.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="game"></div>
+  <noscript>Der Studiums-Simulator braucht JavaScript.</noscript>
+
+  <!-- Phaser 3 vom CDN; falls offline/gesperrt: lokale Kopie -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+  <script>window.Phaser || document.write('<script src="vendor/phaser.min.js"><\/script>');</script>
+
+  <!-- Kern (ohne Phaser-Abhängigkeit beim Laden) -->
+  <script src="src/config.js"></script>
+  <script src="src/core/state.js"></script>
+  <script src="src/core/physics.js"></script>
+  <script src="src/core/level.js"></script>
+  <script src="src/core/textures.js"></script>
+  <script src="src/core/audio.js"></script>
+  <script src="src/core/ui.js"></script>
+  <script src="src/core/sidequest.js"></script>
+
+  <!-- Inhalte -->
+  <script src="src/levels/semester.js"></script>
+  <script src="src/data/klausurfragen.js"></script>
+  <script src="src/data/pruefung.js"></script>
+
+  <!-- Szenen -->
+  <script src="src/scenes/BootScene.js"></script>
+  <script src="src/scenes/MenuScene.js"></script>
+  <script src="src/scenes/GameScene.js"></script>
+  <script src="src/scenes/HudScene.js"></script>
+  <script src="src/scenes/EduroamScene.js"></script>
+  <script src="src/scenes/WasserspenderScene.js"></script>
+  <script src="src/scenes/KlausurScene.js"></script>
+  <script src="src/scenes/PruefungScene.js"></script>
+  <script src="src/scenes/PauseScene.js"></script>
+  <script src="src/scenes/GameOverScene.js"></script>
+
+  <script src="src/main.js"></script>
+</body>
+</html>
