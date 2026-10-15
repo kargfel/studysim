@@ -7,8 +7,13 @@ Prüfungskommission.
 
 ## Starten
 
-`index.html` per Doppelklick öffnen. Mehr braucht es nicht: kein Server, kein Build.
-Phaser 3.90 kommt vom CDN. Ohne Internet lädt automatisch die lokale Kopie aus `vendor/`.
+**Online:** <https://studysim.felixkarg.de>
+
+**Lokal:** `index.html` per Doppelklick öffnen. Mehr braucht es nicht: kein Server, kein Build.
+Phaser 3.90 kommt dann vom CDN. Ohne Internet lädt automatisch die lokale Kopie aus `vendor/`.
+
+**Selbst hosten:** `docker compose up -d --build` startet das Spiel auf Port 2223. Ohne Docker geht
+`npm start`. Die Anleitung für Homeserver, Traefik und Cloudflare steht in [`docs/HOSTING.md`](docs/HOSTING.md).
 
 ## Steuerung
 
@@ -57,7 +62,10 @@ src/levels/semester.js  das Level, aus lesbaren ASCII-Bausteinen zusammengesetzt
 src/data/             Fragenkataloge (Klausur, Prüfung)
 src/scenes/           eine Datei pro Szene
 tests/                Unit-Tests, Level-Prüfer, Headless-Browser-Tests
+deploy/server.mjs     statischer Webserver fürs Hosting (Port 2223, Sicherheits-Header, Cache-Busting)
+Dockerfile, compose.yaml   Docker-Betrieb auf dem Homeserver
 docs/ARCHITECTURE.md  Schnittstellen und Szenenfluss
+docs/HOSTING.md       Anleitung: Homeserver, Traefik, Cloudflare
 ```
 
 Das Level steht als ASCII-Art in `src/levels/semester.js`, zum Beispiel:
@@ -77,6 +85,7 @@ Einmalig `npm install` ausführen. Das installiert nur `playwright-core`; genutz
 npm run test:unit    # Spiellogik (Physik, Spielstand, Level-Parser)
 npm run test:level   # Ist jeder Abschnitt schaffbar? Der Prüfer durchsucht alle Eingabefolgen mit der echten Physik.
 npm run test:smoke   # Headless-Browser: alle Szenen, kompletter Durchlauf, Exmatrikulation, Pause und Screenshots
+npm run test:hosting # Webserver: Header, Zugriffsschutz, Spielstart über http:// ohne CSP-Verstöße
 npm run zip          # dist/Spiel.zip für die Abgabe
 ```
 
@@ -89,3 +98,8 @@ Debug-Parameter für den Browser:
 
 Das Spiel ist im Vibe-Coding-Workshop („Neue Konzepte der Informatik“) mit KI-Unterstützung (Claude Code) entstanden.
 Den Prompt findest du in `PROMPT.md`.
+
+## Drittanbieter
+
+[Phaser 3.90.0](https://phaser.io) © Richard Davey, Phaser Studio Inc., steht unter der MIT-Lizenz
+(siehe `vendor/PHASER-LICENSE.md`). Alle Grafiken und Klänge des Spiels werden zur Laufzeit im Code erzeugt.

@@ -1,0 +1,15 @@
+.git
+.gitignore
+node_modules
+dist
+docs
+tests
+screenshots
+*.md
+!vendor/PHASER-LICENSE.md
+package.json
+package-lock.json
+compose.yaml
+Dockerfile
+.dockerignore
+.DS_Store

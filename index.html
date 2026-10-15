@@ -5,15 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Studiums-Simulator – Semester Dash (DHBW Edition)</title>
   <meta name="description" content="Ein Semester als Geometry-Dash-Level: Nachklausuren, eduroam, Wasserspender ohne CO₂ und die mündliche Projektarbeitsprüfung als Endboss.">
+  <meta name="theme-color" content="#e2001a">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <!-- Link-Vorschau (z. B. im Kurs-Chat) -->
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:title" content="Studiums-Simulator – Semester Dash (DHBW Edition)">
+  <meta property="og:description" content="Ein Semester als Geometry-Dash-Level: Nachklausuren, eduroam, Wasserspender ohne CO₂ und die mündliche Prüfung als Endboss.">
+  <meta property="og:url" content="https://studysim.felixkarg.de/">
+  <meta property="og:image" content="https://studysim.felixkarg.de/og-image.png">
+  <meta property="og:image:width" content="800">
+  <meta property="og:image:height" content="600">
+  <meta name="twitter:card" content="summary_large_image">
+
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="game"></div>
   <noscript>Der Studiums-Simulator braucht JavaScript.</noscript>
 
-  <!-- Phaser 3 vom CDN; falls offline/gesperrt: lokale Kopie -->
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
-  <script>window.Phaser || document.write('<script src="vendor/phaser.min.js"><\/script>');</script>
+  <!-- Phaser 3: lokal vom CDN (Fallback vendor/), gehostet immer die eigene Kopie -->
+  <script src="src/phaser-loader.js"></script>
 
   <!-- Kern (ohne Phaser-Abhängigkeit beim Laden) -->
   <script src="src/config.js"></script>

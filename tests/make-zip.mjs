@@ -9,7 +9,8 @@ const out = path.join(root, 'dist', 'Spiel.zip');
 fs.mkdirSync(path.dirname(out), { recursive: true });
 if (fs.existsSync(out)) fs.rmSync(out);
 
-const include = ['index.html', 'css', 'src', 'vendor', 'docs', 'tests', 'screenshots', 'package.json', 'README.md', 'PROMPT.md']
+const include = ['index.html', 'favicon.svg', 'og-image.png', 'css', 'src', 'vendor', 'docs', 'tests', 'deploy', 'screenshots',
+  'Dockerfile', 'compose.yaml', '.dockerignore', 'package.json', 'README.md', 'PROMPT.md']
   .filter((p) => fs.existsSync(path.join(root, p)));
 
 execFileSync('zip', ['-r', '-q', out, ...include, '-x', 'screenshots/_tmp/*', '*.DS_Store'], { cwd: root, stdio: 'inherit' });
