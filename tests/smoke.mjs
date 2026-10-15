@@ -74,16 +74,20 @@ await check('Menü lädt auch ohne CDN (vendor/phaser.min.js)', async (open) => 
   return ctx;
 });
 
-await check('Runner startet und zeichnet', async (open) => {
-  const ctx = await open({ scene: 'GameScene' });
+// Screenshot mitten im Sprung: Taste noch auf der freien Anlaufstrecke halten
+async function runnerShot(open, section, file) {
+  const ctx = await open({ scene: 'GameScene', params: section ? `section=${section}` : '' });
   await waitForScene(ctx.page, 'GameScene', 5000);
-  await ctx.page.waitForTimeout(2600);
+  await ctx.page.waitForTimeout(2100);
   await ctx.page.keyboard.down('Space');
-  await ctx.page.waitForTimeout(180);
-  await ctx.page.screenshot({ path: shotPath('02-runner.png') });
+  await ctx.page.waitForTimeout(600);
+  await ctx.page.screenshot({ path: shotPath(file) });
   await ctx.page.keyboard.up('Space');
   return ctx;
-});
+}
+
+await check('Runner startet und zeichnet', (open) => runnerShot(open, 0, '02-runner.png'));
+await check('Klausurenphase (schnell) zeichnet', (open) => runnerShot(open, 2, '03b-klausurenphase.png'));
 
 await check('Praxisphase (Abschnitt 2) läuft', async (open) => {
   const ctx = await open({ scene: 'GameScene', params: 'section=1&god=1&speed=2' });

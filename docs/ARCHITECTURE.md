@@ -94,13 +94,24 @@ Menü ─► Side Quest direkt (Übungsmodus, data.practice = true) ─► zurü
 `isPractice(scene)`. `result = {id, title, success, ects, message, grade?}`.
 
 ### `SS.Audio`
-`unlock()`, `sfx(name)` mit `jump, coin, death, checkpoint, portal, pad, orb, click, success, fail, error, type, water, buzz, tick, win, lose`,
-`music.play(track)` mit `menu, run, klausur, boss, sidequest`, `music.stop()`, `toggleMute()`, `setMuted(b)`, `isMuted()`.
+`unlock()`, `sfx(name)` mit `jump, coin, death, checkpoint, portal, pad, orb, click, success, fail, error, type, water, buzz, tick, win, lose`
+(unbekannte Namen bleiben still), `music.play(track)` mit `menu, run, klausur, boss, sidequest` (unbekannter Track = Stille),
+`music.stop()`, `music.current` (nur lesen!), `toggleMute()`, `setMuted(b)`, `isMuted()`, `status()` (Debug-Info).
+Die Notation der Musik-Patterns steht am Anfang von Abschnitt 3 in `src/core/audio.js`.
 
 ### GameScene
 `init(data)`: `{newRun = true, section = 0, god = false, timeScale = 1}`. `getHudInfo()` →
-`{progress (0–1), sectionIndex, sectionTitle, phaseLabel ('Theoriephase'|'Praxisphase'), speedLabel, attempt}`.
+`{progress (0–1), sectionIndex, sectionTitle, phaseLabel ('Theoriephase'|'Praxisphase'), speedLabel, attempt}`
+plus optional `sectionCount`, `sectionMarks` (Checkpoint-Positionen 0–1 für den Fortschrittsbalken) und `debugLabel`.
 Startet `HudScene` parallel und beendet sie beim eigenen Shutdown.
+
+Das `resume`-Event der GameScene kommt aus zwei Richtungen: Side Quests übergeben `{sideQuestResult}`,
+die `PauseScene` setzt ohne Daten fort (Esc, P oder Enter). Ein Resume ohne `sideQuestResult` heißt einfach „weiterlaufen“.
+
+### Hinweise zu `SS.UI`-Buttons
+Buttons erkennen Klicks über eine unsichtbare `Zone`. Ein *klickbares* Abdunkelungs-Rechteck über
+Buttons fängt deren Klicks ab. Overlays deshalb nicht interaktiv machen und darunterliegende Buttons
+bei Bedarf mit `setVisible(false)` ausblenden.
 
 ## Debug-Parameter (URL)
 
