@@ -52,7 +52,8 @@
   ];
 
   // Mini-Aufgabe „Fundiert“: Zeiger im grünen Bereich stoppen
-  const ARGUMENT = { zone: 0.22, hardZone: 0.15, sweepMs: 700, hardSweepMs: 540, timeoutMs: 3500 };
+  // armMs: so lange zählt nach dem Start keine Eingabe (zweiter Klick eines Doppelklicks auf „Fundiert“)
+  const ARGUMENT = { zone: 0.22, hardZone: 0.15, sweepMs: 700, hardSweepMs: 540, timeoutMs: 3500, armMs: 300 };
 
   // Zwischenfälle: Minispiel-Methode der Szene und Zeitlimit
   const INCIDENT_GAMES = {
@@ -96,6 +97,7 @@
   const INPUT_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR', 'SPACE', 'UP', 'DOWN', 'LEFT', 'RIGHT'];
   const ANSWER_KEYS = ['ONE', 'TWO', 'THREE', 'FOUR'];
   const ARROWS = { UP: -90, DOWN: 90, LEFT: 180, RIGHT: 0 };   // Drehwinkel der Pfeil-Textur
+  const ARROW_BUTTONS = ['LEFT', 'UP', 'DOWN', 'RIGHT'];        // Pfeil-Buttons der Live-Demo (Maus und Touch)
 
   // ── Texturen (Canvas-2D, Präfix pr_) ───────────────────────────
   const SKIN = '#f1c7a3';
@@ -404,7 +406,7 @@
         subtitle: 'Die Kommission wartet. Der Beamer auch.',
         lines: [
           'Beantworte 6 Fragen – per Klick oder Taste 1–4.',
-          'Jede Frage verlangt einen anderen Antwortstil.',
+          'Welcher Antwortstil wirkt, hängt von der Frage ab.',
           'Zwischenfälle schnell lösen, die Zeit läuft!',
           'Nervosität 100 % = Blackout = Note 5,0.'
         ],
@@ -921,8 +923,10 @@
         });
       };
       const timeout = this.time.delayedCall(ARGUMENT.timeoutMs, () => finish(false));
+      const armedAt = this.time.now + ARGUMENT.armMs;
       this.inputHandler = (input) => {
         if (input !== 'SPACE' && input !== 'POINTER') return;
+        if (this.time.now < armedAt) return;   // Doppelklick-Schutz
         finish(marker.x >= zone.x && marker.x <= zone.x + zone.width);
       };
     }
@@ -986,6 +990,7 @@
       const correct = this.rng.between(1, 3);
       this.showScreenOverlay('KEIN SIGNAL', 0x1d4ed8);
       const tryInput = (n, btn) => {
+        if (!this.inputHandler) return;   // schon gelöst oder Zeit um – das Fenster blendet nur noch aus
         if (n === correct) {
           finish(true);
           return;
@@ -1008,7 +1013,7 @@
       };
     }
 
-    /** Live-Demo: angezeigte Pfeiltasten-Folge nachtippen (Fehler = von vorn). */
+    /** Live-Demo: angezeigte Pfeil-Folge nachtippen – Pfeiltasten oder Buttons (Fehler = von vorn). */
     qteDemo(ctx, finish) {
       this.showScreenOverlay('Fehler 500\nDemo abgestürzt', 0x7f1d1d);
       const keys = Object.keys(ARROWS);
@@ -1021,6 +1026,14 @@
         const arrow = this.add.image(startX + i * spacing, y, 'pr_pfeil').setAngle(ARROWS[key]);
         ctx.layer.add([cap, arrow]);
         return { cap, arrow };
+      });
+      // Pfeil-Buttons für Maus und Touch: wirken wie die Pfeiltasten
+      ARROW_BUTTONS.forEach((key, i) => {
+        const btn = SS.UI.button(this, C.WIDTH / 2 + (i - 1.5) * 96, ctx.area.y + 148, '', () => this.handleInput(key), {
+          width: 80, height: 48, color: COL.dhbwGray
+        });
+        btn.add(this.add.image(0, 0, 'pr_pfeil').setAngle(ARROWS[key]).setScale(0.8));
+        ctx.layer.add(btn);
       });
       let progress = 0;
       const paint = () => caps.forEach((c, i) => {
@@ -1085,7 +1098,9 @@
         sweep.stop();
         plug.x = port.x;
         battery.setText('Lädt …').setColor(C.CSS.green);
-        this.tweens.add({ targets: plug, y: plug.y + 16, duration: 140, ease: 'Quad.easeIn', onComplete: () => finish(true) });
+        // sofort werten – sonst kann die Zeit noch während der Steck-Animation ablaufen
+        this.tweens.add({ targets: plug, y: plug.y + 16, duration: 140, ease: 'Quad.easeIn' });
+        finish(true);
       };
     }
 
@@ -1186,9 +1201,9 @@
       this.speakerText.setText(this.content.examiners.prof.name + ':').setColor(C.CSS.yellow);
       this.typeLine(verdict, 50);
 
-      // Notenstempel landet auf der Beamer-Leinwand
+      // Notenstempel landet auf der Beamer-Leinwand (deckend, sonst scheint der Folientitel durch)
       const g = this.add.graphics();
-      g.fillStyle(0x0f172a, 0.95).fillRoundedRect(-125, -64, 250, 128, 16);
+      g.fillStyle(0x0f172a, 1).fillRoundedRect(-125, -64, 250, 128, 16);
       g.lineStyle(5, color, 1).strokeRoundedRect(-125, -64, 250, 128, 16);
       const stamp = this.add.container(LAYOUT.screenX + LAYOUT.screenW / 2, LAYOUT.screenY + LAYOUT.screenH / 2 + 4, [
         g,

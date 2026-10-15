@@ -92,7 +92,7 @@
         this.scene.resume(GAME_KEY);
         this.scene.stop();
       } else {
-        this.scene.start('MenuScene'); // direkt per ?scene=PauseScene geöffnet: kein Lauf zum Fortsetzen
+        this.scene.start('MenuScene', {}); // direkt per ?scene=PauseScene geöffnet: kein Lauf zum Fortsetzen
       }
     }
 
@@ -101,7 +101,7 @@
       this.closing = true;
       this.scene.stop(HUD_KEY);
       this.scene.stop(GAME_KEY);
-      this.scene.start('MenuScene');
+      this.scene.start('MenuScene', {}); // {}: sonst behält Phaser die alten Startdaten (z. B. einen Übungs-Toast)
     }
 
     toggleSound() {

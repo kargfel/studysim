@@ -5,7 +5,7 @@
  *   'graduated'      Zeugnis mit Siegel, Konfetti und ggf. „NEUER REKORD!“
  *   'failed'         Zeugnis „nicht bestanden“ (Note > 4,0) mit Hinweis auf die Wiederholungsprüfung
  *   'exmatrikuliert' Brief vom Prüfungsamt mit rotem Stempel
- * Der Highscore wird pro Durchlauf genau einmal gespeichert.
+ * Der Highscore wird pro Durchlauf genau einmal gespeichert – Debug-Läufe (siehe isDebugRun) zählen nicht.
  */
 (function () {
   'use strict';
@@ -40,11 +40,13 @@
   const STAMP_RED = '#d0001c';
   const LINE = { rule: 0x9aa0ab, ink: 0x1f2430, red: 0xc8001a, signature: 0x1d3a8a }; // dieselben Töne für Graphics
 
-  // Stempel sitzen unten auf dem Papier (wie neben einer Unterschrift), damit die Zahlen lesbar bleiben
+  // Stempel sitzen unten auf dem Papier unter dem Text (wie neben einer Unterschrift), damit alles lesbar bleibt
   const STAMPS = {
-    exmatrikuliert: { key: 'ui_stamp_exmatrikuliert', label: 'EXMATRIKULIERT', w: 420, h: 100, x: CX + 20, y: 440, angle: -8 },
+    exmatrikuliert: { key: 'ui_stamp_exmatrikuliert', label: 'EXMATRIKULIERT', w: 316, h: 76, x: CX + 20, y: 473, angle: -3 },
     failed: { key: 'ui_stamp_nicht_bestanden', label: 'NICHT BESTANDEN', w: 280, h: 64, x: RIGHT - 120, y: PAPER.y + PAPER.h - 46, angle: -5 }
   };
+  const STAMP_GAP = 2;                       // Mindestabstand zwischen Text und Stempel (siehe placeStamp)
+  const STAMP_MIN_SCALE = 0.6;               // so weit schrumpft ein Stempel, wenn der Text mehr Platz braucht
 
   const DOC = {
     brand: { fontFamily: F.display, fontSize: '28px', color: INK_RED },
@@ -185,6 +187,31 @@
     return savedHighscores.get(run);
   }
 
+  /**
+   * Endlage eines Stempels: seine Position aus STAMPS, solange der Text darüber Platz lässt. Bricht eine
+   * breitere Ersatzschrift mehr Zeilen um, rutscht er tiefer und wird notfalls kleiner – bleibt aber auf dem Papier.
+   */
+  function placeStamp(stamp, textBottom) {
+    const rad = Phaser.Math.DegToRad(stamp.angle);
+    const halfH = (stamp.w * Math.abs(Math.sin(rad)) + stamp.h * Math.cos(rad)) / 2;   // halbe Höhe des gedrehten Stempels
+    const top = textBottom + STAMP_GAP;
+    if (stamp.y - halfH >= top) return { y: stamp.y, scale: 1 };
+    const paperBottom = PAPER.y + PAPER.h;
+    const scale = Phaser.Math.Clamp((paperBottom - top) / (2 * halfH), STAMP_MIN_SCALE, 1);
+    return { y: Math.min(top + halfH * scale, paperBottom - halfH * scale), scale };
+  }
+
+  /**
+   * Debug-Lauf? Das Beispiel-Zeugnis der BootScene kommt mit {debug: true}. Beim Runner entscheiden dessen
+   * Startdaten (siehe GameScene.init): unverwundbar, anderes Tempo oder Start in einem späteren Abschnitt.
+   */
+  function isDebugRun(scene, data) {
+    if (data && data.debug) return true;
+    const game = scene.scene.get('GameScene');
+    const start = (game && game.sys.settings.data) || {};
+    return !!start.god || (Number(start.timeScale) || 1) !== 1 || (start.section | 0) > 0;
+  }
+
   /** Ausgang des Laufs; fehlt er oder ist unbekannt, entscheidet die Note. */
   function resolveOutcome(run) {
     const known = [Outcome.GRADUATED, Outcome.FAILED, Outcome.EXMATRIKULIERT];
@@ -276,11 +303,14 @@
       super('GameOverScene');
     }
 
-    create() {
+    create(data) {
       const run = SS.State.run;
       this.leaving = false;
       this.outcome = resolveOutcome(run);
-      this.highscore = saveHighscoreOnce(run);
+      // Debug-Läufe lassen die Bestleistung unberührt (und zeigen kein „NEUER REKORD!“)
+      this.highscore = isDebugRun(this, data)
+        ? { highscore: SS.State.loadHighscore(), newBestEcts: false, newBestGrade: false }
+        : saveHighscoreOnce(run);
       SS.Audio.music.stop();
 
       this.createBackground();
@@ -288,6 +318,7 @@
       if (this.outcome === Outcome.EXMATRIKULIERT) this.writeExmatrikulation(run);
       else this.writeZeugnis(run);
       this.createButtons();
+      SS.UI.onKey(this, 'M', () => SS.Audio.toggleMute()); // Ton an/aus wie im Runner
       this.cameras.main.fadeIn(FADE_IN_MS, 0, 0, 0);
       this.playEntrance();
     }
@@ -336,6 +367,7 @@
       } else {
         this.writeRetakeNotice(w);
       }
+      this.textBottom = w.y;   // Unterkante von Text bzw. Hinweiskasten – ein Stempel kommt darunter (placeStamp)
       this.addSignature();
     }
 
@@ -433,13 +465,14 @@
           'einlegen – oder einfach ein neues Semester starten.',
         style: DOC.small,
         wrap: RIGHT - LEFT
-      }, 12);
+      }, 10);
       w.line({ x: LEFT, text: 'Mit freundlichen Grüßen\nIhr Prüfungsamt', style: DOC.body }, 8);
       w.line({
         x: LEFT,
         text: 'Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.',
         style: Object.assign({}, DOC.small, { fontStyle: 'italic' })
-      });
+      }, 0);
+      this.textBottom = w.y;   // Unterkante des Textes – der Stempel kommt darunter (placeStamp)
     }
 
     /** Graue Box mit den Eckdaten des Laufs. */
@@ -467,7 +500,8 @@
       SS.UI.button(this, CX - 120, BUTTON_Y, 'Nochmal', () => this.goTo('GameScene', { newRun: true }), {
         width: 220, height: 48, key: 'ENTER'
       });
-      SS.UI.button(this, CX + 120, BUTTON_Y, 'Menü', () => this.goTo('MenuScene'), {
+      // {}: sonst behält Phaser die alten Startdaten des Menüs (z. B. einen Übungs-Toast)
+      SS.UI.button(this, CX + 120, BUTTON_Y, 'Menü', () => this.goTo('MenuScene', {}), {
         width: 220, height: 48, color: C.COLORS.dhbwGray, key: 'ESC'
       });
     }
@@ -497,12 +531,14 @@
     }
 
     /** Stempel saust aufs Papier: kurz groß, dann Aufprall mit Shake, Sound und Farbspritzern. */
-    slamStamp({ key, x, y, angle }) {
-      const stamp = this.add.image(x, y, key).setAngle(angle).setScale(2.4).setAlpha(0);
+    slamStamp(cfg) {
+      const { key, x, angle } = cfg;
+      const { y, scale } = placeStamp(cfg, this.textBottom);
+      const stamp = this.add.image(x, y, key).setAngle(angle).setScale(2.4 * scale).setAlpha(0);
       this.paper.add(stamp);
       this.tweens.add({
         targets: stamp,
-        scale: 1,
+        scale,
         alpha: 0.9,
         duration: 220,
         ease: 'Cubic.In',

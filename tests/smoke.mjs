@@ -79,13 +79,17 @@ await check('Menü lädt auch ohne CDN (vendor/phaser.min.js)', async (open) => 
   return ctx;
 });
 
-// Screenshot mitten im Sprung: Taste noch auf der freien Anlaufstrecke halten
+// Screenshot mitten im Sprung: sobald der Countdown vorbei ist, auf der freien Anlaufstrecke
+// springen und fotografieren, solange der Würfel in der Luft ist (zustandsbasiert, nicht zeitbasiert)
 async function runnerShot(open, section, file) {
   const ctx = await open({ scene: 'GameScene', params: section ? `section=${section}` : '' });
   await waitForScene(ctx.page, 'GameScene', 5000);
-  await ctx.page.waitForTimeout(2100);
+  await ctx.page.waitForFunction(() => window.SS.game.scene.getScene('GameScene').mode === 'running', null, { timeout: 15000 });
   await ctx.page.keyboard.down('Space');
-  await ctx.page.waitForTimeout(600);
+  await ctx.page.waitForFunction(() => {
+    const p = window.SS.game.scene.getScene('GameScene').player;
+    return p && !p.grounded && p.vy > -200; // nahe am Scheitelpunkt
+  }, null, { timeout: 5000 });
   await ctx.page.screenshot({ path: shotPath(file) });
   await ctx.page.keyboard.up('Space');
   return ctx;

@@ -7,6 +7,7 @@
  *   ?scene=GameOverScene&outcome=failed        Zeugnis/Bescheid mit einem Beispiel-Durchlauf
  *                                              (outcome: graduated | failed | exmatrikuliert)
  *   ?scene=EduroamScene                        jede andere Szene direkt im Übungsmodus
+ * Beispiel-Zeugnis und Runner-Läufe mit god, speed ≠ 1 oder section > 0 zählen nicht für die Bestleistung.
  */
 (function () {
   'use strict';

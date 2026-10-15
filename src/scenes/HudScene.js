@@ -13,6 +13,7 @@
 
   const MARGIN = 20;
   const BAR = { x: 250, y: 18, w: 300, h: 20 };   // Fortschrittsbalken oben in der Mitte
+  const MARK_H = 5;                               // Checkpoint-Striche: Höhe über dem Balken
   const PIP = { size: 10, gap: 5 };               // Kästchen für die verbleibenden Versuche
   const ATTEMPT_LABELS = ['Erstversuch', 'Nachklausur 1', 'Nachklausur 2'];
   const ATTEMPT_COLORS = [C.CSS.ink, C.CSS.yellow, C.CSS.danger];
@@ -120,14 +121,10 @@
         g.fillStyle(C.COLORS.dhbwRed, 1).fillRoundedRect(BAR.x + 2, BAR.y + 2, w, BAR.h - 4, r - 2);
         g.fillStyle(0xffffff, 0.3).fillRect(BAR.x + r, BAR.y + 4, Math.max(0, w - 2 * r + 4), 2);
       }
-      // Checkpoint-Striche nur am oberen und unteren Rand – die Mitte gehört der Prozentzahl
-      g.fillStyle(0xffffff, 0.75);
-      marks.forEach((m) => {
-        const x = BAR.x + 2 + inner * m - 1;
-        g.fillRect(x, BAR.y + 2, 2, 4);
-        g.fillRect(x, BAR.y + BAR.h - 6, 2, 4);
-      });
       g.lineStyle(2, 0xffffff, 0.9).strokeRoundedRect(BAR.x, BAR.y, BAR.w, BAR.h, r);
+      // Checkpoint-Striche stehen oben auf dem Rand: In der Schiene liefen sie durch die Prozentzahl
+      g.fillStyle(0xffffff, 0.9);
+      marks.forEach((m) => g.fillRect(BAR.x + 2 + inner * m - 1, BAR.y - MARK_H, 2, MARK_H));
     }
 
     showSection(info) {
@@ -150,12 +147,15 @@
     }
 
     showAttempt(attempt) {
-      if (attempt === this.shown.attempt) return;
+      // Beim letzten Crash bleibt attempt stehen – exmatrikuliert heißt: kein Versuch mehr übrig
+      const exhausted = SS.State.run.outcome === SS.State.Outcome.EXMATRIKULIERT;
+      const shown = exhausted ? 'exmatrikuliert' : attempt;
+      if (shown === this.shown.attempt) return;
       const isChange = this.shown.attempt !== undefined;
-      this.shown.attempt = attempt;
+      this.shown.attempt = shown;
       const i = Phaser.Math.Clamp((attempt | 0) - 1, 0, ATTEMPT_LABELS.length - 1);
       this.attemptText.setText(ATTEMPT_LABELS[i]).setColor(ATTEMPT_COLORS[i]);
-      this.drawPips(C.ATTEMPTS_PER_SECTION - i);
+      this.drawPips(exhausted ? 0 : C.ATTEMPTS_PER_SECTION - i);
       if (isChange) this.tweens.add({ targets: this.attemptText, scale: { from: 1.3, to: 1 }, duration: 320, ease: 'Back.Out' });
     }
 

@@ -44,6 +44,7 @@
   const CRASH_BANNER_MS = 1700;
   const RESPAWN_DELAY_MS = 900;
   const GAME_OVER_DELAY_MS = 1300;
+  const END_FADE_MS = 280;            // Abblenden zum Zeugnis/Bescheid (Welt und HUD gemeinsam)
   const CHECKPOINT_DELAY_MS = 800;
   const THEME_FADE_MS = 900;
 
@@ -139,8 +140,11 @@
     create() {
       this.world = SS.Level.parse(SS.Levels.semester);
       this.physicsWorld = this.god ? createGodWorld(this.world) : this.world;
+      // Fortschritt reicht bis zur letzten Fahne (dort hält die Physik an) – am Ende stehen so 100 %
+      const checkpoints = this.world.checkpoints;
+      this.progressEnd = checkpoints[checkpoints.length - 1].x;
       // Lage der Checkpoints auf dem Fortschrittsbalken (0–1), ohne den letzten
-      this.sectionMarks = this.world.sections.slice(0, -1).map((s) => s.endX / this.world.levelWidth);
+      this.sectionMarks = checkpoints.slice(0, -1).map((cp) => cp.x / this.progressEnd);
       this.prepareRunState();
       this.resetRuntimeState();
 
@@ -171,7 +175,7 @@
       this.prevPos = { x: 0, y: 0 };    // Position vor dem letzten Physik-Schritt (für weiche Darstellung)
       this.accumulator = 0;
       this.collectedCoins = new Set();  // Münz-IDs, die in diesem Versuch schon zählen
-      this.waitForRelease = false;      // nach Pause/Side Quest erst loslassen, dann wieder springen
+      this.waitForRelease = false;      // nach einer Pause im Lauf erst loslassen, dann wieder springen
       this.themeKey = null;
       this.colors = { ground: 0x000000, line: 0xffffff };
       this.colorTween = null;
@@ -592,7 +596,8 @@
     onResume(sys, data) {
       // Tasten, die während der Pause losgelassen wurden, sonst „hängen“ (Phantom-Sprung)
       if (this.input.keyboard) this.input.keyboard.resetKeys();
-      this.waitForRelease = true;
+      // Sperre nur mitten im Lauf (z. B. Maus noch gedrückt) – mit Countdown davor zählt Halten wie beim Start.
+      this.waitForRelease = this.mode === MODE.RUNNING;
       // Auch ohne Ergebnis weiter, falls eine Side Quest es vergisst – sonst stünde das Spiel.
       if ((data && data.sideQuestResult) || this.mode === MODE.CHECKPOINT) this.continueAfterSideQuest();
     }
@@ -615,7 +620,21 @@
     endRun(outcome, delayMs) {
       this.mode = MODE.ENDED;
       SS.State.finishRun(outcome);
-      this.time.delayedCall(delayMs, () => SS.UI.fadeToScene(this, 'GameOverScene', { outcome }));
+      this.time.delayedCall(delayMs, () => this.fadeToGameOver(outcome));
+    }
+
+    /**
+     * Abblenden zum Zeugnis/Bescheid. Die HudScene liegt über der Welt: Ihr Kamera-Fade
+     * deckt die ganze Leinwand ab, Welt und HUD blenden so gemeinsam (und nur einmal) ab.
+     */
+    fadeToGameOver(outcome) {
+      if (!this.scene.isActive('HudScene')) {
+        SS.UI.fadeToScene(this, 'GameOverScene', { outcome }, END_FADE_MS);
+        return;
+      }
+      const hudCam = this.scene.get('HudScene').cameras.main;
+      hudCam.fadeOut(END_FADE_MS, 0, 0, 0);
+      hudCam.once('camerafadeoutcomplete', () => this.scene.start('GameOverScene', { outcome }));
     }
 
     openPause() {
@@ -827,7 +846,7 @@
       const p = this.player;
       const sec = this.currentSection();
       return {
-        progress: Phaser.Math.Clamp((p.x + P / 2) / this.world.levelWidth, 0, 1),
+        progress: Phaser.Math.Clamp((p.x + P / 2) / this.progressEnd, 0, 1),
         sectionIndex: sec.index,
         sectionCount: this.world.sections.length,
         sectionTitle: sec.title,

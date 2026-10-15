@@ -849,7 +849,7 @@
       }
       if (now < this.nextBlockedAt) return;
       this.nextBlockedAt = now + 900;
-      SS.Audio.sfx(hissing ? 'buzz' : 'error');
+      SS.Audio.sfx(hissing ? 'hiss' : 'error');
       this.popText(CX, NOZZLE_Y + 34, hissing ? 'pfffft …' : '*klick*', '#e5e7eb', 18);
     }
 
@@ -1196,7 +1196,8 @@
         .fillRoundedRect(left, top + press, TAP.w, TAP.h - 3, 10);
       g.fillStyle(0xffffff, 0.18).fillRoundedRect(left + 4, top + press + 3, TAP.w - 8, 9, 4);
       const led = !held ? 0x1f2937 : (blocked ? C.COLORS.danger : C.COLORS.green);
-      g.fillStyle(led, 1).fillCircle(left + TAP.w - 9, top + press + 9, 3.5);
+      // LED unten rechts neben „Taste n“ – oben rechts verdeckte sie das „l“ von „Sprudel“
+      g.fillStyle(led, 1).fillCircle(left + TAP.w - 9, top + press + TAP.h - 14, 3.5);
       button.label.setY(TAP.y - 7 + press);
       button.hint.setY(TAP.y + 12 + press);
     }

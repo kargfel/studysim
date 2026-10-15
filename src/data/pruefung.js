@@ -26,7 +26,7 @@
       subject: ['der Mensa-Warteschlange', 'des Kaffeeautomaten', 'der Parkplatzsuche am Campus', 'der Raumbuchung',
         'des Druckerpapier-Nachschubs', 'der Wasserspender-Logistik', 'der Klausurvorbereitung', 'des WLAN-Empfangs im Hörsaal'],
       method: ['mittels Blockchain', 'auf Basis großer Sprachmodelle', 'im Internet der Dinge', 'mit Low-Code-Plattformen',
-        'durch Gamification', 'mit digitalem Zwilling', 'mit Excel-Makros', 'in der Cloud']
+        'durch Gamification', 'mit digitalem Zwilling', 'mit Tabellen-Makros', 'in der Cloud']
     },
 
     examiners: {
@@ -171,7 +171,7 @@
       },
       {
         id: 'demo', title: 'Live-Demo crasht!',
-        hint: 'Tippe die Pfeiltasten-Folge nach, um neu zu starten.',
+        hint: 'Tippe die Pfeil-Folge nach, um neu zu starten. Pfeiltasten oder Klicken.',
         success: 'Neustart in Rekordzeit – die Demo läuft wieder.',
         fail: '„Bei mir lief das gestern noch …“'
       },
@@ -184,7 +184,7 @@
       {
         id: 'folie', title: 'Die Folie hängt!',
         hint: 'Hämmere auf die Leertaste (oder klicke schnell)!',
-        success: 'Weiter geht’s – Folie 8 von 47.',
+        success: 'Weiter geht’s – die Folie ist endlich geladen.',
         fail: 'Die Folie bleibt hängen. Sie improvisieren.'
       },
       {

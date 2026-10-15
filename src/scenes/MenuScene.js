@@ -7,6 +7,8 @@
  * Vordergrund: Titel, Buttons, Bestleistungen und nach dem Übungsmodus ein Ergebnis-Toast.
  *
  * Start-Daten: { practiceResult? }  – Ergebnis einer Side Quest aus dem Übungsmodus.
+ * Startsperre: Enter startet das Semester erst START_DELAY_MS (Echtzeit) nach dem Start der Szene.
+ * Tests warten deshalb auf menu.canStart, bevor sie Enter drücken.
  */
 (function () {
   'use strict';
@@ -25,12 +27,13 @@
   const START_Y = 236;
   const SECONDARY_Y = 310;
   const STATS = { y: 350, w: 440, h: 90 };
-  const TOAST_Y = 474;
+  const TOAST_Y = 486;                       // dreizeiliger Toast passt zwischen Bestleistung und Fußzeile
   const FOOTER_Y = 562;
   const OVERLAY_W = 680;
   const OVERLAY_DEPTH = 1200;                // über Toasts (1000)
   const SECONDARY_COLOR = C.COLORS.dhbwGray;
   const MAX_ECTS = C.MAX_ECTS || 30;        // 12 Münzen + 18 aus Side Quests
+  const START_DELAY_MS = 400;               // Startsperre für Enter: Doppel-Enter auf der Übungs-Ergebniskarte startet kein Semester
 
   // ── Hintergrund-Animation ───────────────────────────────────
   const SCROLL_SPEED = C.SPEED.normal;      // px/s – wie im Runner
@@ -323,8 +326,11 @@
 
     init(data) {
       this.practiceResult = (data && data.practiceResult) || null;
+      // Ergebnis nur einmal zeigen: Phaser behält alte Startdaten, wenn ein späterer Start keine mitgibt
+      this.sys.settings.data = {};
       this.overlay = null;
       this.leaving = false;
+      this.canStart = false;
     }
 
     create() {
@@ -336,10 +342,14 @@
       SS.UI.onKey(this, 'ESC', () => this.closeOverlay());
       SS.Audio.music.play('menu');
       this.cameras.main.fadeIn(250, 0, 0, 0);
+      // Startsperre in Echtzeit (Bildzeit der Spielschleife): this.time.now ist hier nach einem Neustart veraltet,
+      // und Szenen-Timer laufen bei gekapptem dt (erste Frames nach dem Laden, Headless) langsamer als die Uhr
+      this.startUnlockAt = this.game.loop.now + START_DELAY_MS;
       if (this.practiceResult) this.showPracticeToast(this.practiceResult);
     }
 
     update(time, delta) {
+      if (!this.canStart && time >= this.startUnlockAt) this.canStart = true;
       this.backdrop.update(Math.min(delta, MAX_FRAME_MS) / 1000);
     }
 
@@ -385,10 +395,14 @@
       const glow = this.add.image(CX, START_Y, 'glow').setDisplaySize(440, 140).setBlendMode('ADD').setAlpha(0.25);
       this.tweens.add({ targets: glow, alpha: 0.55, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
 
+      this.startButton = SS.UI.button(this, CX, START_Y, 'Semester starten', () => this.startSemester(), {
+        width: 340, height: 64, fontSize: '26px'
+      });
+      // Enter erst nach der Startsperre – vorher passiert nichts, auch kein Klick-Ton. Klicks brauchen keine
+      // Sperre: Der Button ist anfangs unsichtbar, und kein Button der Vorszenen liegt an seiner Stelle.
+      SS.UI.onKey(this, 'ENTER', () => { if (this.canStart) this.startButton.press(); });
       this.mainButtons = [
-        SS.UI.button(this, CX, START_Y, 'Semester starten', () => this.startSemester(), {
-          width: 340, height: 64, fontSize: '26px', key: 'ENTER'
-        }),
+        this.startButton,
         SS.UI.button(this, CX - 145, SECONDARY_Y, 'Side Quests üben', () => this.openPracticeOverlay(), {
           width: 270, height: 50, fontSize: '19px', color: SECONDARY_COLOR
         }),
@@ -436,7 +450,8 @@
       const title = result.title || result.id || 'Side Quest';
       const verdict = result.success ? 'bestanden' : 'nicht bestanden';
       const grade = typeof result.grade === 'number' ? ` · Note ${SS.State.formatGrade(result.grade)}` : '';
-      SS.UI.toast(this, `Übung „${title}“: ${verdict}\n${result.ects | 0} ECTS${grade} (zählt nicht fürs Semester)`, {
+      // drei kurze Zeilen statt zwei langer: lange Quest-Titel brechen sonst mitten im Urteil um
+      SS.UI.toast(this, `Übung „${title}“\n${verdict} – ${result.ects | 0} ECTS${grade}\n(zählt nicht fürs Semester)`, {
         y: TOAST_Y, duration: 3200, bg: result.success ? 0x14532d : 0x7f1d1d
       });
     }

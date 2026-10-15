@@ -107,7 +107,7 @@
           error: 'Gastzugang nur mit Voucher aus dem Sekretariat. Sprechzeit: dienstags, 10 bis 11 Uhr.' },
         { label: 'Mensa_Free_WiFi', sub: 'offen · sehr verdächtig', bars: 3,
           error: 'Erst das Tagesgericht mit fünf Sternen bewerten, dann gibt’s Internet. Heute: Linseneintopf.' },
-        { label: 'iPhone von Kevin', sub: 'persönlicher Hotspot', bars: 2,
+        { label: 'Handy von Kevin', sub: 'persönlicher Hotspot', bars: 2,
           error: 'Kevin hat seinen Hotspot gerade abgeschaltet. Er braucht sein Datenvolumen selbst.' }
       ]
     },
@@ -168,7 +168,7 @@
           error: 'Ohne @-Domain weiß eduroam nicht, zu welcher Hochschule du gehörst.' },
         { label: 'admin',
           error: 'Netter Versuch. Die Hochschul-IT hat das gesehen.' },
-        { label: 'Max Mustermann (Kurs 24B)',
+        { label: 'Max Mustermann (Kurs B)',
           error: 'Leerzeichen und Klammern im Benutzernamen? Der Server bekommt Schnappatmung.' }
       ]
     },
@@ -181,13 +181,13 @@
     {
       id: 'zertifikat', type: 'choice', checklist: 'Zertifikat', app: 'Sicherheit', danger: true,
       prompt: 'Zertifikat abgelaufen!',
-      hint: 'radius.dhbw.example · gültig bis: gestern',
+      hint: 'Dein easyroam-Profil · gültig bis: gestern',
       loading: 'Neues Profil wird erzeugt …',
       options: [
         { label: 'Neues Profil erzeugen', correct: true },
         { label: 'Zertifikat nicht prüfen', security: true },
         { label: 'Handy-Datum auf 2019 stellen',
-          error: 'Zertifikat gültig! Dafür hält dein Handy dich jetzt für einen Zeitreisenden. Keine App startet mehr.' },
+          error: 'Jetzt ist das Zertifikat „noch nicht gültig“ – und jede andere App meldet Zertifikatsfehler.' },
         { label: 'Weinen',
           error: 'Verständlich. Hilft aber nicht: Das Zertifikat ist immer noch abgelaufen.' }
       ]
@@ -699,7 +699,7 @@
         { str: 'Verbunden ✔', size: 26, color: T.hex(PH.ok), bold: true, y: SCREEN.y + 246 },
         { str: 'eduroam', size: 15, color: PH.inkSoft, y: SCREEN.y + 278 },
         { str: 'Signal: 1 Balken', size: 20, bold: true, y: SCREEN.y + 306 },
-        { str: 'Download: 0,3 MB/s – reicht für eine Folie pro Minute.', size: 13, color: PH.inkSoft, y: SCREEN.y + 342 }
+        { str: 'Download: 30 kB/s – reicht für eine Folie pro Minute.', size: 13, color: PH.inkSoft, y: SCREEN.y + 342 }
       ]);
       SS.UI.confetti(this, CENTER_X, SCREEN.y + 120);
       this.time.delayedCall(900, () => this.notify(NOTES.cancelled, END_DELAY_MS));
