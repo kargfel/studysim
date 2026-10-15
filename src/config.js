@@ -35,6 +35,7 @@
     // ── Regeln ───────────────────────────────────────────────────
     ATTEMPTS_PER_SECTION: 3,  // Erstversuch + 2 Nachklausuren
     ECTS_PER_COIN: 1,
+    MAX_ECTS: 30,             // 12 Münzen + 18 aus Side Quests
     PASS_GRADE: 4.0,          // schlechter als 4,0 = nicht bestanden
 
     STORAGE_KEY: 'studiums-simulator.v1',

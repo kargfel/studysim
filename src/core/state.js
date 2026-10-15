@@ -94,7 +94,7 @@
       this.run.sideQuests.push(entry);
       if (entry.ects) this.addEcts(entry.ects);
       this.run.ectsAtSectionStart = this.run.ects;
-      if (entry.grade !== null) this.run.grade = entry.grade;
+      if (entry.grade !== null && entry.id === 'pruefung') this.run.grade = entry.grade; // Endnote = mündliche Prüfung
       return entry;
     },
 

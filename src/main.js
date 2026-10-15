@@ -35,6 +35,7 @@
   const unlock = () => SS.Audio && SS.Audio.unlock();
   window.addEventListener('pointerdown', unlock);
   window.addEventListener('keydown', unlock);
+  window.addEventListener('touchend', unlock); // ältere iOS-Versionen werten pointerdown nicht als Geste
 
   SS.game = new Phaser.Game({
     type: Phaser.AUTO,

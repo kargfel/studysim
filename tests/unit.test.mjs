@@ -222,3 +222,28 @@ test('Level: das Semester-Level ist gültig und vollständig', () => {
     assert.equal(world.isSolid(Math.floor(s.startX / C.TILE), world.groundRow), true, `Boden unter dem Start von ${s.id}`);
   }
 });
+
+test('State: nur die mündliche Prüfung setzt die Endnote', () => {
+  State.newRun();
+  State.recordSideQuest({ id: 'klausur', title: 'Klausur', success: true, ects: 6, grade: 1.7 });
+  assert.equal(State.run.grade, null);
+  assert.equal(State.run.sideQuests[0].grade, 1.7);
+  State.recordSideQuest({ id: 'pruefung', title: 'Prüfung', success: true, ects: 5, grade: 2.3 });
+  assert.equal(State.run.grade, 2.3);
+});
+
+test('Audio: API läuft ohne WebAudio (Node) ohne Fehler', async () => {
+  const { loadScripts } = await import('./_load.mjs');
+  loadScripts(['src/core/audio.js']);
+  const A = globalThis.SS.Audio;
+  assert.doesNotThrow(() => {
+    A.unlock();
+    for (const name of ['jump', 'coin', 'death', 'checkpoint', 'portal', 'pad', 'orb', 'click', 'success', 'fail', 'error', 'type', 'water', 'buzz', 'tick', 'win', 'lose', 'gibtsnicht']) A.sfx(name);
+    A.music.play('run');
+    A.music.play('boss');
+    A.music.stop();
+    A.toggleMute();
+    A.setMuted(false);
+  });
+  assert.equal(typeof A.isMuted(), 'boolean');
+});

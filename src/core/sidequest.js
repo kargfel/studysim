@@ -28,6 +28,7 @@
      * cfg: { title, subtitle?, lines?: string[], buttonLabel?, accent? }
      */
     intro(scene, cfg, onStart) {
+      scene.__sideQuestFinished = false; // Phaser verwendet Szenen-Instanzen wieder
       const accent = cfg.accent != null ? cfg.accent : C.COLORS.yellow;
       const lines = cfg.lines || [];
       const panelW = 620;
@@ -111,6 +112,7 @@
     finish(scene, result) {
       if (scene.__sideQuestFinished) return;
       scene.__sideQuestFinished = true;
+      scene.events.once('shutdown', () => { scene.__sideQuestFinished = false; });
       const game = scene.scene.get('GameScene');
       const fromRun = !this.isPractice(scene) && game && scene.scene.isPaused('GameScene');
       if (!fromRun) {

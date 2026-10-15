@@ -14,6 +14,7 @@
  *   {type:"down"|"up", key:"Space"}      Taste halten/loslassen
  *   {type:"type", text:"123456"}         Text tippen
  *   {type:"click", x:400, y:300}         Klick in Spielkoordinaten (800×600)
+ *   {type:"mousedown", x, y} / {type:"mouseup"} / {type:"move", x, y}   Maus halten, loslassen, bewegen
  *   {type:"shot", out:"pfad.png"}        Screenshot
  *   {type:"eval", js:"SS.State.run.ects"} JS im Spiel ausführen (Ergebnis wird ausgegeben)
  *   {type:"scenes"}                      aktive Szenen ausgeben
@@ -116,6 +117,9 @@ export async function runActions(page, actions, results) {
       case 'up': await page.keyboard.up(act.key); break;
       case 'type': await page.keyboard.type(act.text, { delay: 40 }); break;
       case 'click': await page.mouse.click(act.x, act.y); break;
+      case 'move': await page.mouse.move(act.x, act.y); break;
+      case 'mousedown': await page.mouse.move(act.x, act.y); await page.mouse.down(); break;
+      case 'mouseup': await page.mouse.up(); break;
       case 'shot':
         fs.mkdirSync(path.dirname(path.resolve(root, act.out)), { recursive: true });
         await page.screenshot({ path: path.resolve(root, act.out) });

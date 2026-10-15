@@ -29,7 +29,7 @@ if (errors.length) {
 }
 
 const world = Level.parse(def);
-const MAX_FRONTIER = 6000;
+const MAX_FRONTIER = 20000;
 
 function keyOf(p) {
   return [

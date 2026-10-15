@@ -30,12 +30,24 @@
     return (mix(r) << 16) | (mix(g) << 8) | mix(b);
   }
 
-  /** Hängt einen Tastatur-Handler an, der beim Beenden der Szene entfernt wird. */
+  /**
+   * Hängt einen Tastatur-Handler an, der beim Beenden der Szene entfernt wird.
+   * Phaser 3.90 meldet bei mehreren Tastendrücken im selben Frame frühere keydowns
+   * erneut – deshalb wird jedes DOM-Ereignis pro Handler nur einmal weitergereicht.
+   */
   function onKey(scene, keyName, handler) {
     if (!scene.input || !scene.input.keyboard) return () => {};
     const evt = 'keydown-' + keyName;
-    scene.input.keyboard.on(evt, handler);
-    const off = () => scene.input && scene.input.keyboard && scene.input.keyboard.off(evt, handler);
+    const seen = new WeakSet();
+    const once = (event) => {
+      if (event && typeof event === 'object') {
+        if (seen.has(event)) return;
+        seen.add(event);
+      }
+      handler(event);
+    };
+    scene.input.keyboard.on(evt, once);
+    const off = () => scene.input && scene.input.keyboard && scene.input.keyboard.off(evt, once);
     scene.events.once('shutdown', off);
     return off;
   }
@@ -270,7 +282,7 @@
         graphics: g,
         getRemaining: () => remaining,
         getFraction: () => Math.max(0, remaining / durationMs),
-        addTime(ms) { if (!done) { remaining = Math.min(durationMs, remaining + ms); draw(); } },
+        addTime(ms) { if (!done) { remaining = Math.max(0, Math.min(durationMs, remaining + ms)); draw(); } },
         pause() { paused = true; },
         resume() { paused = false; },
         stop() { done = true; },
@@ -289,6 +301,12 @@
       const o = opts || {};
       const cps = o.cps || 45;
       let i = 0;
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (o.onDone) o.onDone();
+      };
       textObj.setText('');
       const timer = scene.time.addEvent({
         delay: 1000 / cps,
@@ -296,12 +314,13 @@
         callback: () => {
           i += 1;
           textObj.setText(fullText.slice(0, i));
-          if (i >= fullText.length && o.onDone) o.onDone();
+          if (i >= fullText.length) finish();
         }
       });
-      if (!fullText.length && o.onDone) o.onDone();
+      if (!fullText.length) finish();
       return {
-        skip() { timer.remove(false); textObj.setText(fullText); if (o.onDone) o.onDone(); },
+        skip() { timer.remove(false); i = fullText.length; textObj.setText(fullText); finish(); },
+        cancel() { timer.remove(false); finished = true; },
         isDone: () => i >= fullText.length
       };
     },
